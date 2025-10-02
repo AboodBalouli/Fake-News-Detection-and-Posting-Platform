@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # PostgreSQL Database
@@ -21,7 +21,7 @@ services:
 
   # Backend API
   backend:
-    build: 
+    build:
       context: ./backend
       dockerfile: Dockerfile
     environment:

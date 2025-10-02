@@ -18,12 +18,14 @@ A full-stack web application for sharing and analyzing news articles, built with
 ## 🛠️ Tech Stack
 
 ### Frontend
+
 - **React 19.1.1** with TypeScript
 - **Vite** for build tooling
 - **CSS3** for styling
 - **Fetch API** for HTTP requests
 
 ### Backend
+
 - **FastAPI** with Python
 - **SQLAlchemy** ORM
 - **PostgreSQL** database
@@ -34,17 +36,20 @@ A full-stack web application for sharing and analyzing news articles, built with
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - **Node.js** 18+ and npm
 - **Python** 3.8+
 - **PostgreSQL** database
 
 ### 1. Clone Repository
+
 ```bash
 git clone <your-repo-url>
 cd learning_from_documentation
 ```
 
 ### 2. Backend Setup
+
 ```bash
 # Navigate to backend
 cd backend
@@ -73,6 +78,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### 3. Frontend Setup
+
 ```bash
 # Navigate to frontend (new terminal)
 cd frontend
@@ -85,6 +91,7 @@ npm run dev
 ```
 
 ### 4. Access Application
+
 - **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
@@ -118,7 +125,9 @@ learning_from_documentation/
 ## 🔧 Configuration
 
 ### Backend Environment Variables
+
 Create `backend/.env`:
+
 ```env
 DATABASE_URL=postgresql://username:password@localhost:5432/fake_news_db
 SECRET_KEY=your-super-secret-key-here
@@ -127,6 +136,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
 ### Database Setup
+
 ```sql
 -- Create database
 CREATE DATABASE fake_news_db;
@@ -139,6 +149,7 @@ GRANT ALL PRIVILEGES ON DATABASE fake_news_db TO fake_news_user;
 ## 🐳 Docker Deployment (Optional)
 
 ### Backend Dockerfile
+
 ```dockerfile
 FROM python:3.11
 
@@ -155,6 +166,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ### Frontend Dockerfile
+
 ```dockerfile
 FROM node:18 AS build
 
@@ -175,10 +187,12 @@ CMD ["nginx", "-g", "daemon off;"]
 ## 📚 API Documentation
 
 The API is fully documented with OpenAPI/Swagger. Once the backend is running, visit:
+
 - **Interactive Docs**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
 
 ### Key Endpoints
+
 - `POST /api/register` - User registration
 - `POST /api/login` - User authentication
 - `GET /api/posts` - Get all posts
@@ -190,12 +204,14 @@ The API is fully documented with OpenAPI/Swagger. Once the backend is running, v
 ## 🧪 Testing
 
 ### Backend Tests
+
 ```bash
 cd backend
 pytest
 ```
 
 ### Frontend Tests
+
 ```bash
 cd frontend
 npm test
@@ -204,17 +220,20 @@ npm test
 ## 🚀 Production Deployment
 
 ### Backend (Railway/Heroku/DigitalOcean)
+
 1. Set environment variables in your hosting platform
 2. Update `DATABASE_URL` to your production database
 3. Deploy backend code
 4. Run database migrations
 
 ### Frontend (Vercel/Netlify)
+
 1. Build the frontend: `npm run build`
 2. Deploy the `dist` folder
 3. Set up environment variables for API URL
 
 ### Environment Variables for Production
+
 ```env
 # Backend
 DATABASE_URL=your-production-db-url
