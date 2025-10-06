@@ -1,7 +1,7 @@
 from fastapi import Depends, FastAPI, HTTPException, status, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import List, Optional
 from datetime import datetime, timedelta
 import database  # Simple database connection
@@ -11,6 +11,7 @@ from sqlalchemy import func
 import models
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os,shutil
+from ml_service import predict_fake_news
 
 # Security scheme for JWT tokens
 security = HTTPBearer()
@@ -23,7 +24,7 @@ class UserCreate(BaseModel):
     name: str
     email: str
     password: str
-    pfp_filename: Optional[str] = None  
+    pfp_filename: Optional[str] = None
     
 class UserLogin(BaseModel):
     username: str
@@ -39,6 +40,34 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     
+class FeedbackCreate(BaseModel):
+    user_feedback: str  # 'fake' or 'real'
+    comment: Optional[str] = None  # Optional reason for reporting
+    
+class FeedbackResponse(BaseModel):
+    id: int
+    status: str
+    created_at: datetime
+    message: str
+
+class AdminFeedbackList(BaseModel):
+    id: int
+    post_id: int
+    post_title: str
+    post_content: str
+    post_author: str
+    user_id: int  
+    username: str
+    name: str
+    email: str
+    pfp_filename: Optional[str] = None
+    ml_prediction: Optional[str]
+    ml_confidence: Optional[float]
+    reported_as: str  
+    comment: Optional[str]
+    reporter_name: str
+    created_at: datetime
+    status: str  
 
 app = FastAPI()
 
@@ -65,6 +94,18 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
                     headers={"WWW-Authenticate": "Bearer"},
                 )
     return user
+
+def get_admin_user(current_user: models.User = Depends(get_current_user)):
+    
+    # admin middleware - checks if current user has admin role
+    # this creates a dependency chain: JWT → User → Admin Check
+    
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required. Only administrators can access this resource."
+        )
+    return current_user
 
 @app.get("/api/posts/upvotes")
 def get_user_upvotes(
@@ -163,8 +204,7 @@ def create_comment(
     post_id: int,
     comment: CommentCreate,
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(database.get_db)
-):
+    db: Session = Depends(database.get_db)):
     # Check if post exists
     post = db.query(models.Post).filter(models.Post.id == post_id).first()
     if not post:
@@ -325,7 +365,9 @@ def get_articles(db: Session = Depends(database.get_db)):
             "image": post.image,
             "timestamp": post.date.strftime("%m/%d/%Y, %I:%M:%S %p"),
             "author": post.author.name,
-            "author_pfp": post.author.pfp  # include author profile picture
+            "author_pfp": post.author.pfp,  # include author profile picture
+            "prediction": post.prediction,
+            "confidence": post.confidence,
         })
     return {"articles": articles}
 
@@ -370,15 +412,125 @@ def create_article(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(database.get_db)
 ):
+    ml = predict_fake_news(article.content)
     new_article = models.Post(
         title=article.title,
         content=article.content,
         image=article.image_filename,  # file name only
-        author_id=current_user.id
+        author_id=current_user.id,
+        prediction=ml["prediction"],
+        confidence=ml["confidence"],
     )
+
     
     db.add(new_article)
     db.commit()
     db.refresh(new_article)
     
     return {"message": "Article created successfully", "article": new_article}
+
+@app.post("/api/posts/{post_id}/report")
+def report_post(
+    post_id: int,
+    feedback: FeedbackCreate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    current_post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    
+    if not current_post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    # Check if user already reported this post
+    existing_feedback = db.query(models.UserFeedback).filter(
+        models.UserFeedback.post_id == post_id,
+        models.UserFeedback.user_id == current_user.id
+    ).first()
+
+    if existing_feedback:
+        raise HTTPException(status_code=400, detail="You have already reported this post")
+    
+    new_feedback = models.UserFeedback(
+        post_id = post_id,
+        user_id = current_user.id,
+        predicted_label = current_post.prediction,
+        reported_as = feedback.reported_as,  # Fixed: use reported_as
+        comment = feedback.comment,
+    )
+    
+    db.add(new_feedback)
+    db.commit()
+    db.refresh(new_feedback)
+    
+    return FeedbackResponse(
+        id=new_feedback.id,
+        status=new_feedback.status,
+        created_at=new_feedback.created_at,
+        message="Report submitted successfully"
+    )
+    
+@app.get("/api/admin/feedback", response_model=List[AdminFeedbackList]) # response model is important here ya abood because it's for type safety and validation, for example, if you want to query all users then return them, it won't return what's not in the response model
+def get_pending_feedback(
+    admin_user: models.User = Depends(get_admin_user),
+    db: Session = Depends(database.get_db)
+):
+    feedback_list = db.query(models.UserFeedback)\
+    .join(models.Post)\
+    .join(models.User)\
+    .filter(models.UserFeedback.status == 'pending')\
+    .all()
+    
+    result = []
+    
+    for feedback in feedback_list:
+        result.append(AdminFeedbackList(
+            id=feedback.id,
+            post_id=feedback.post_id,
+            post_title=feedback.post.title,
+            post_content=feedback.post.content,
+            post_author=feedback.post.author.name,
+            user_id=feedback.user.id,
+            username=feedback.user.username,
+            name=feedback.user.name,
+            email=feedback.user.email,
+            pfp_filename=feedback.user.pfp,
+            ml_prediction=feedback.predicted_label,  
+            ml_confidence=feedback.post.confidence,  
+            reported_as=feedback.reported_as,  
+            comment=feedback.comment,
+            reporter_name=feedback.user.name,  
+            created_at=feedback.created_at,    
+            status=feedback.status             
+        ))
+    
+    return result
+
+@app.put("/api/admin/feedback/{feedback_id}/approve")
+def approve_feedback(
+    feedback_id: int,
+    action: str, # approve or reject
+    admin_user: models.User = Depends(get_admin_user),
+    db: Session = Depends(database.get_db)):
+    existing_article = db.query(models.UserFeedback).filter(models.UserFeedback.id == feedback_id).first()
+    if existing_article is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="article not found")
+    
+    existing_article.status = action
+    existing_article.approved_by_admin_id = admin_user.id
+    
+    if action == "approved":
+        training_data = models.TrainingData(
+            post_id=existing_article.post_id,
+            label=existing_article.reported_as,  # user's feedback becomes truth
+            approved_by_admin_id=admin_user.id
+        )
+        db.add(training_data)
+
+    if action == "approved":
+        post = db.query(models.Post).filter(models.Post.id == existing_article.post_id).first()
+        post.approved = True
+    
+    db.commit()
+    db.refresh(existing_article)
+    
+    return {"message": "Article updated successfully", "article": existing_article}    

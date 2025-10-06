@@ -1,0 +1,7 @@
+# This file ensures the models directory is tracked by git
+# Trained ML models will be saved in this directory
+# 
+# Models:
+# - random_forest_model.sav: Random Forest classifier
+# - logistic_regression_model.sav: Logistic Regression classifier  
+# - tfidf_vectorizer.sav: TF-IDF vectorizer for text preprocessing

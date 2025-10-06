@@ -14,6 +14,8 @@ interface Props {
     timestamp: string;
     author?: string;
     author_pfp?: string; // profile picture filename
+    prediction?: string; // "Real" or "Fake"
+    confidence?: number; // 0.0 to 100.0
   }>;
 }
 
@@ -318,7 +320,7 @@ const ArticleList = ({ articles }: Props) => {
                   e.currentTarget.src = Default_pfp; // fallback to default on error
                 }}
               />
-              <div>
+              <div className="flex-grow-1">
                 <h6 className="mb-0 fw-bold">
                   {(article as any).author || "Abood"}
                 </h6>
@@ -327,8 +329,34 @@ const ArticleList = ({ articles }: Props) => {
                 </small>
                 <p className="card-text">{article.title}</p>
               </div>
-            </div>
 
+              {/* ML Prediction Badge - Top Right */}
+              {article.prediction && article.confidence && (
+                <div className="ms-auto">
+                  <div
+                    className={`badge ${
+                      article.prediction === "Fake"
+                        ? "bg-danger text-white"
+                        : "bg-success text-white"
+                    }`}
+                    style={{
+                      fontSize: "0.85rem",
+                      padding: "8px 12px",
+                      textAlign: "center",
+                      minWidth: "120px",
+                    }}
+                  >
+                    <div className="fw-bold">
+                      This post is {article.prediction.toLowerCase()}
+                    </div>
+                    <div style={{ fontSize: "0.75rem", opacity: 0.9 }}>
+                      with {article.confidence.toFixed(0)}% confidence
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
             {/* article content with expand/collapse functionality */}
             <p className="card-text">
               {

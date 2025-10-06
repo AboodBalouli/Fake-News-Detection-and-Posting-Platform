@@ -128,10 +128,14 @@ const PostArticle = () => {
                   type="text"
                   className="form-control"
                   id="title"
-                  placeholder="Enter the title"
                   value={articleTitle}
                   onChange={(e) => setArticleTitle(e.target.value)}
+                  placeholder="Enter your article title (max 50 characters)"
+                  maxLength={50}
                 />
+                <small className="form-text text-muted">
+                  {articleTitle.length}/50 characters
+                </small>
               </div>
               <div className="mb-3">
                 <label className="form-label">Article Content</label>
@@ -141,6 +145,7 @@ const PostArticle = () => {
                   value={articleContent}
                   onChange={(e) => setArticleContent(e.target.value)}
                   placeholder="Enter your article content (max 2000 characters)"
+                  maxLength={2000}
                 />
                 <small className="form-text text-muted">
                   {articleContent.length}/2000 characters
