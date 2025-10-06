@@ -362,3 +362,8 @@ tests/
 
 # Documentation builds
 docs/_build/
+ai/dataset/Fake.csv
+ai/dataset/True.csv
+backend/ai_models/logistic_regression_model.sav
+backend/ai_models/random_forest_model.sav
+backend/ai_models/tfidf_vectorizer.sav
