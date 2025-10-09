@@ -15,7 +15,8 @@ interface Props {
     author?: string;
     author_pfp?: string; // profile picture filename
     prediction?: string; // "Real" or "Fake"
-    confidence?: number; // 0.0 to 100.0
+    confidence?: number | string; // 0.0 to 100.0
+    approved?: boolean | string;
   }>;
 }
 
@@ -53,6 +54,22 @@ const ArticleList = ({ articles }: Props) => {
   const [expandedComments, setExpandedComments] = useState<Set<number>>(
     new Set()
   );
+
+  // ===== REPORT MODAL STATE =====
+  // controls which article's report modal is open (null means no modal open)
+  const [reportModalOpen, setReportModalOpen] = useState<number | null>(null);
+
+  // stores the report form data
+  const [reportForm, setReportForm] = useState({
+    reportedAs: "fake", // default to "fake"
+    comment: "",
+  });
+
+  // stores report submission status
+  const [reportStatus, setReportStatus] = useState<{
+    type: "success" | "error" | null;
+    message: string;
+  }>({ type: null, message: "" });
 
   // ===== API FUNCTIONS =====
   // fetches all comments for a specific article from the backend API
@@ -175,7 +192,96 @@ const ArticleList = ({ articles }: Props) => {
   };
 
   // ===== ACTION HANDLERS =====
+
+  // ===== REPORT MODAL HANDLERS =====
+  // opens the report modal for a specific article
+  const openReportModal = (articleId: number) => {
+    setReportModalOpen(articleId);
+    setReportForm({ reportedAs: "fake", comment: "" }); // reset form
+    setReportStatus({ type: null, message: "" }); // reset status
+  };
+
+  // closes the report modal
+  const closeReportModal = () => {
+    setReportModalOpen(null);
+    setReportForm({ reportedAs: "fake", comment: "" }); // reset form
+    setReportStatus({ type: null, message: "" }); // reset status
+  };
+
+  // handles form submission
+  const submitReport = async () => {
+    if (reportModalOpen === null) return;
+
+    try {
+      await handleReport(reportModalOpen);
+      setTimeout(() => {
+        closeReportModal();
+      }, 1500);
+    } catch (error) {
+      console.error("Report submission failed:", error);
+    }
+  };
+
   // toggles upvote for an article, calls API and updates local state
+
+  const handleReport = async (articleId: number) => {
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        setReportStatus({
+          type: "error",
+          message: "Please login to report posts",
+        });
+        return;
+      }
+
+      const response = await fetch(
+        `http://localhost:8000/api/posts/${articleId}/report`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            reported_as: reportForm.reportedAs,
+            comment: reportForm.comment,
+          }),
+        }
+      );
+
+      if (response.ok) {
+        setReportStatus({
+          type: "success",
+          message:
+            "Report submitted successfully! Admins will review this post.",
+        });
+      } else {
+        const errorData = await response.json();
+        if (response.status === 400) {
+          setReportStatus({
+            type: "error",
+            message: "You have already reported this post",
+          });
+        } else if (response.status === 404) {
+          setReportStatus({ type: "error", message: "Post not found" });
+        } else {
+          setReportStatus({
+            type: "error",
+            message: errorData.detail || "Failed to submit report",
+          });
+        }
+      }
+    } catch (error) {
+      console.log("error trying to submit the report", error);
+      setReportStatus({
+        type: "error",
+        message: "Network error. Please check your connection.",
+      });
+    }
+  };
+
   const handleUpvote = async (articleId: number) => {
     try {
       const response = await fetch(
@@ -330,33 +436,88 @@ const ArticleList = ({ articles }: Props) => {
                 <p className="card-text">{article.title}</p>
               </div>
 
-              {/* ML Prediction Badge - Top Right */}
-              {article.prediction && article.confidence && (
-                <div className="ms-auto">
+              <div className="ms-auto d-flex align-items-center gap-2">
+                {/* ML Prediction Badge - Top Right */}
+                {article.prediction &&
+                  article.confidence &&
+                  (() => {
+                    const confidenceValue =
+                      typeof article.confidence === "number"
+                        ? article.confidence
+                        : Number(article.confidence);
+                    if (Number.isNaN(confidenceValue)) {
+                      return null;
+                    }
+                    return (
+                      <div
+                        className={`badge ${
+                          article.prediction === "Fake"
+                            ? "bg-danger text-white"
+                            : "bg-success text-white"
+                        }`}
+                        style={{
+                          fontSize: "0.85rem",
+                          padding: "8px 12px",
+                          textAlign: "center",
+                          minWidth: "120px",
+                        }}
+                      >
+                        <div className="fw-bold text-uppercase">
+                          {article.prediction} News
+                        </div>
+                        <div style={{ fontSize: "0.75rem", opacity: 0.9 }}>
+                          {confidenceValue.toFixed(0)}% model confidence
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                {(article.approved === true || article.approved === "true") && (
                   <div
-                    className={`badge ${
-                      article.prediction === "Fake"
-                        ? "bg-danger text-white"
-                        : "bg-success text-white"
-                    }`}
+                    className="badge bg-primary text-white"
                     style={{
-                      fontSize: "0.85rem",
+                      fontSize: "0.8rem",
                       padding: "8px 12px",
                       textAlign: "center",
-                      minWidth: "120px",
+                      minWidth: "140px",
                     }}
                   >
-                    <div className="fw-bold">
-                      This post is {article.prediction.toLowerCase()}
-                    </div>
-                    <div style={{ fontSize: "0.75rem", opacity: 0.9 }}>
-                      with {article.confidence.toFixed(0)}% confidence
+                    <div className="fw-bold">✅ Approved</div>
+                    <div style={{ fontSize: "0.7rem", opacity: 0.9 }}>
+                      Verified by an admin
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+
+                {/* Report Button */}
+                <button
+                  className="btn btn-outline-warning btn-sm d-flex align-items-center gap-1"
+                  onClick={() => openReportModal(article.id)}
+                  style={{
+                    borderRadius: "20px",
+                    padding: "6px 12px",
+                    fontSize: "0.8rem",
+                    fontWeight: "500",
+                    border: "2px solid #ffc107",
+                    color: "#f57c00",
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "#ffc107";
+                    e.currentTarget.style.color = "#212529";
+                    e.currentTarget.style.transform = "translateY(-1px)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                    e.currentTarget.style.color = "#f57c00";
+                    e.currentTarget.style.transform = "translateY(0)";
+                  }}
+                >
+                  🚩 Report
+                </button>
+              </div>
             </div>
-            
+
             {/* article content with expand/collapse functionality */}
             <p className="card-text">
               {
@@ -537,6 +698,142 @@ const ArticleList = ({ articles }: Props) => {
           </div>
         </div>
       ))}
+
+      {/* ===== REPORT MODAL ===== */}
+      {reportModalOpen && (
+        <div
+          className="modal d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          onClick={closeReportModal}
+        >
+          <div
+            className="modal-dialog modal-dialog-centered"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  <span className="text-warning">🚩</span> Report Post
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={closeReportModal}
+                ></button>
+              </div>
+
+              <div className="modal-body">
+                <div className="mb-4">
+                  <h6 className="fw-bold mb-3">
+                    Do you believe this post contains inaccurate information?
+                  </h6>
+                  <p className="text-muted small">
+                    Your report helps our community identify potentially
+                    misleading content. An admin will review this post and take
+                    appropriate action.
+                  </p>
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label fw-bold">
+                    What do you think this post is?
+                  </label>
+                  <div className="d-flex gap-3">
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="radio"
+                        name="reportedAs"
+                        id="fake"
+                        value="fake"
+                        checked={reportForm.reportedAs === "fake"}
+                        onChange={(e) =>
+                          setReportForm({
+                            ...reportForm,
+                            reportedAs: e.target.value,
+                          })
+                        }
+                      />
+                      <label className="form-check-label" htmlFor="fake">
+                        <span className="text-danger">❌ Fake/Misleading</span>
+                      </label>
+                    </div>
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="radio"
+                        name="reportedAs"
+                        id="real"
+                        value="real"
+                        checked={reportForm.reportedAs === "real"}
+                        onChange={(e) =>
+                          setReportForm({
+                            ...reportForm,
+                            reportedAs: e.target.value,
+                          })
+                        }
+                      />
+                      <label className="form-check-label" htmlFor="real">
+                        <span className="text-success">✅ Real/Accurate</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <label htmlFor="reportComment" className="form-label">
+                    Additional details{" "}
+                    <span className="text-muted">(optional)</span>
+                  </label>
+                  <textarea
+                    className="form-control"
+                    id="reportComment"
+                    rows={3}
+                    placeholder="Why do you think this post is inaccurate? Provide sources or reasoning..."
+                    value={reportForm.comment}
+                    onChange={(e) =>
+                      setReportForm({ ...reportForm, comment: e.target.value })
+                    }
+                    maxLength={500}
+                  />
+                  <div className="form-text text-end">
+                    {reportForm.comment.length}/500 characters
+                  </div>
+                  {reportStatus.message && (
+                    <div
+                      className={`alert ${
+                        reportStatus.type === "success"
+                          ? "alert-success"
+                          : "alert-danger"
+                      } mt-3`}
+                    >
+                      <small>{reportStatus.message}</small>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={closeReportModal}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-warning"
+                  onClick={submitReport}
+                >
+                  <span className="me-1">🚩</span>
+                  Submit Report
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,52 +1,75 @@
 import pickle as pk
 import re
+from typing import List
 
-def clean_text(text):
-    # Remove Twitter handles starting with '@'
-    text = re.sub(r'@\w+', '', text)
-    # Remove non-alphanumeric characters and extra whitespace
-    text = re.sub(r'[^a-zA-Z\s]', '', text)
-    # Convert multiple whitespace characters to a single space
-    text = re.sub(r'\s+', ' ', text)
-    # Convert the text to lowercase
-    text = text.lower()
-    return text
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import word_tokenize
 
-def predict_fake_news(text, model_type='random_forest'):
-    """
-    Predict if a news article is fake or real
-    
-    Args:
-        text (str): The news article text
-        model_type (str): 'random_forest' or 'logistic_regression'
-    
-    Returns:
-        dict: Prediction result with confidence
-    """
-    # Load the saved models
-    if model_type == 'random_forest':
-        model = pk.load(open('ai_models/random_forest_model.sav', 'rb'))
-    else:
-        model = pk.load(open('ai_models/logistic_regression_model.sav', 'rb'))
-    
-    # Load the vectorizer
-    vectorizer = pk.load(open('ai_models/tfidf_vectorizer.sav', 'rb'))
-    
-    # Clean the text
+
+def _ensure_nltk_data() -> None:
+    """Ensure the necessary NLTK corpora are available."""
+
+    try:
+        nltk.data.find("tokenizers/punkt")
+    except LookupError:
+        nltk.download("punkt", quiet=True)
+
+    for resource in ["stopwords", "wordnet", "omw-1.4"]:
+        try:
+            nltk.data.find(f"corpora/{resource}")
+        except LookupError:
+            nltk.download(resource, quiet=True)
+
+
+_ensure_nltk_data()
+
+STOPWORDS = set(stopwords.words("english"))
+LEMMATIZER = WordNetLemmatizer()
+
+
+def _normalize_token(token: str) -> str:
+    token = re.sub(r"[^a-zA-Z]", "", token)
+    return token.lower()
+
+
+def clean_text(text: str) -> str:
+    """Preprocess raw text into a lemmatized, stopword-free string."""
+
+    if not text:
+        return ""
+
+    tokens: List[str] = word_tokenize(text)
+    processed_tokens: List[str] = []
+
+    for token in tokens:
+        normalized = _normalize_token(token)
+        if not normalized or normalized in STOPWORDS:
+            continue
+        lemma = LEMMATIZER.lemmatize(normalized)
+        if lemma:
+            processed_tokens.append(lemma)
+
+    return " ".join(processed_tokens)
+
+
+def predict_fake_news(text: str):
+    """Predict if a news article is fake or real using the logistic regression model."""
+
+    model = pk.load(open("ai_models/logistic_regression_model.sav", "rb"))
+    vectorizer = pk.load(open("ai_models/tfidf_vectorizer.sav", "rb"))
+
     cleaned_text = clean_text(text)
-    
-    # Vectorize the text
     text_vectorized = vectorizer.transform([cleaned_text])
-    
-    # Make prediction
+
     prediction = model.predict(text_vectorized)[0]
     confidence = model.predict_proba(text_vectorized)[0].max()
-    
-    # Convert prediction to readable format
+
     result = "Real" if prediction == 1 else "Fake"
-    
+
     return {
         "prediction": result,
         "confidence": round(confidence * 100, 2),
-        "model_used": model_type
+        "model_used": "logistic_regression",
     }

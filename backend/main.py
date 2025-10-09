@@ -12,6 +12,7 @@ import models
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os,shutil
 from ml_service import predict_fake_news
+from training_service import TrainingException, retrain_models
 
 # Security scheme for JWT tokens
 security = HTTPBearer()
@@ -41,7 +42,7 @@ class Token(BaseModel):
     token_type: str
     
 class FeedbackCreate(BaseModel):
-    user_feedback: str  # 'fake' or 'real'
+    reported_as: str  # 'fake' or 'real'
     comment: Optional[str] = None  # Optional reason for reporting
     
 class FeedbackResponse(BaseModel):
@@ -69,12 +70,32 @@ class AdminFeedbackList(BaseModel):
     created_at: datetime
     status: str  
 
+
+class AdminUserSummary(BaseModel):
+    id: int
+    username: str
+    name: str
+    email: str
+    role: str
+
+
+class AdminPostSummary(BaseModel):
+    id: int
+    title: str
+    author_id: int
+    author_name: str
+    author_email: str
+    created_at: datetime
+    prediction: Optional[str]
+    confidence: Optional[float]
+    approved: bool
+
 app = FastAPI()
 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -237,7 +258,8 @@ def get_user_name(current_user: models.User = Depends(get_current_user)):
     return {
         "user_name": current_user.name,
         "user_pfp": current_user.pfp,
-        "user_id": current_user.id
+        "user_id": current_user.id,
+        "role": current_user.role
     }
 
 @app.post("/api/login")
@@ -265,7 +287,8 @@ def login_user(user: UserLogin, db: Session = Depends(database.get_db)):
             "username": authenticated_user.username,
             "name": authenticated_user.name,
             "email": authenticated_user.email,
-            "pfp": authenticated_user.pfp
+            "pfp": authenticated_user.pfp,
+            "role": authenticated_user.role
         }
     }
 
@@ -365,9 +388,10 @@ def get_articles(db: Session = Depends(database.get_db)):
             "image": post.image,
             "timestamp": post.date.strftime("%m/%d/%Y, %I:%M:%S %p"),
             "author": post.author.name,
-            "author_pfp": post.author.pfp,  # include author profile picture
+            "author_pfp": post.author.pfp,  
             "prediction": post.prediction,
             "confidence": post.confidence,
+            "approved": post.approved,
         })
     return {"articles": articles}
 
@@ -454,7 +478,7 @@ def report_post(
         post_id = post_id,
         user_id = current_user.id,
         predicted_label = current_post.prediction,
-        reported_as = feedback.reported_as,  # Fixed: use reported_as
+        reported_as = feedback.reported_as,
         comment = feedback.comment,
     )
     
@@ -492,18 +516,106 @@ def get_pending_feedback(
             user_id=feedback.user.id,
             username=feedback.user.username,
             name=feedback.user.name,
+            reporter_name=feedback.user.name,  
             email=feedback.user.email,
             pfp_filename=feedback.user.pfp,
             ml_prediction=feedback.predicted_label,  
             ml_confidence=feedback.post.confidence,  
             reported_as=feedback.reported_as,  
             comment=feedback.comment,
-            reporter_name=feedback.user.name,  
             created_at=feedback.created_at,    
             status=feedback.status             
         ))
     
     return result
+
+
+@app.get("/api/admin/users", response_model=List[AdminUserSummary])
+def list_users(
+    admin_user: models.User = Depends(get_admin_user),
+    db: Session = Depends(database.get_db)
+):
+    users = db.query(models.User).order_by(models.User.id).all()
+    return [
+        AdminUserSummary(
+            id=user.id,
+            username=user.username,
+            name=user.name,
+            email=user.email,
+            role=user.role,
+        )
+        for user in users
+    ]
+
+
+@app.delete("/api/admin/users/{user_id}")
+def delete_user(
+    user_id: int,
+    admin_user: models.User = Depends(get_admin_user),
+    db: Session = Depends(database.get_db)
+):
+    if user_id == admin_user.id:
+        raise HTTPException(status_code=400, detail="Admins cannot delete their own account")
+
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db.delete(user)
+    db.commit()
+
+    return {"message": "User deleted successfully"}
+
+
+@app.get("/api/admin/posts", response_model=List[AdminPostSummary])
+def list_posts(
+    admin_user: models.User = Depends(get_admin_user),
+    db: Session = Depends(database.get_db)
+):
+    posts = (
+        db.query(models.Post)
+        .join(models.User, models.Post.author_id == models.User.id)
+        .all()
+    )
+    summaries = []
+    
+    for post in posts:
+        author = post.author
+        print(post.id)
+        print(post.author)
+        
+        confidence = float(post.confidence) if post.confidence is not None else None
+        summaries.append(
+            AdminPostSummary(
+                id=post.id,
+                title=post.title,
+                author_id=author.id,
+                author_name=author.name,
+                author_email=author.email,
+                created_at=post.date,
+                prediction=post.prediction,
+                confidence=confidence,
+                approved=post.approved if post.approved else False,
+            )
+        )
+
+    return summaries
+
+
+@app.delete("/api/admin/posts/{post_id}")
+def delete_post(
+    post_id: int,
+    admin_user: models.User = Depends(get_admin_user),
+    db: Session = Depends(database.get_db)
+):
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    db.delete(post)
+    db.commit()
+
+    return {"message": "Post deleted successfully"}
 
 @app.put("/api/admin/feedback/{feedback_id}/approve")
 def approve_feedback(
@@ -525,8 +637,7 @@ def approve_feedback(
             approved_by_admin_id=admin_user.id
         )
         db.add(training_data)
-
-    if action == "approved":
+        
         post = db.query(models.Post).filter(models.Post.id == existing_article.post_id).first()
         post.approved = True
     
@@ -534,3 +645,20 @@ def approve_feedback(
     db.refresh(existing_article)
     
     return {"message": "Article updated successfully", "article": existing_article}    
+
+
+@app.post("/api/admin/retrain")
+def retrain_models_endpoint(
+    admin_user: models.User = Depends(get_admin_user),
+    db: Session = Depends(database.get_db),
+):
+    try:
+        metrics = retrain_models(db)
+        return {
+            "message": "Models retrained successfully",
+            "metrics": metrics,
+        }
+    except TrainingException as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover - safety net
+        raise HTTPException(status_code=500, detail="Failed to retrain models") from exc

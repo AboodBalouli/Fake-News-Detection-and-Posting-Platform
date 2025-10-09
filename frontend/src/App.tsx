@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import MainPage from "./pages/MainPage";
 import PostArticle from "./pages/PostArticle";
 import Register from "./pages/Register";
+import Admin from "./pages/Admin";
+import AdminReportDetails from "./pages/AdminReportDetails";
 import ProtectedRoute from "./components/ProtectedRoute";
 function App() {
   return (
@@ -23,6 +25,22 @@ function App() {
           element={
             <ProtectedRoute>
               <PostArticle />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <Admin />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/feedback/:id"
+          element={
+            <ProtectedRoute>
+              <AdminReportDetails />
             </ProtectedRoute>
           }
         />

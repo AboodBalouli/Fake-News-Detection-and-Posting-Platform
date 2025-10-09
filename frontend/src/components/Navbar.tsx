@@ -11,6 +11,9 @@ const Navbar = () => {
   // state to store user information
   const [userName, setUserName] = useState("User");
   const [userProfilePic, setUserProfilePic] = useState("");
+  const [userRole, setUserRole] = useState<string>(() =>
+    localStorage.getItem("role") || "user"
+  );
 
   // fetch user data from your API endpoint
   useEffect(() => {
@@ -24,6 +27,10 @@ const Navbar = () => {
             const user = JSON.parse(userData);
             setUserName(user.name || "User");
             setUserProfilePic(user.pfp || "");
+            const storedRole = localStorage.getItem("role");
+            if (storedRole) {
+              setUserRole(storedRole);
+            }
           }
           return;
         }
@@ -39,6 +46,10 @@ const Navbar = () => {
           const data = await response.json();
           setUserName(data.user_name || "User");
           setUserProfilePic(data.user_pfp || "");
+          if (data.role) {
+            setUserRole(data.role);
+            localStorage.setItem("role", data.role);
+          }
         } else {
           // API failed, fallback to localStorage
           const userData = localStorage.getItem("user");
@@ -46,6 +57,10 @@ const Navbar = () => {
             const user = JSON.parse(userData);
             setUserName(user.name || "User");
             setUserProfilePic(user.pfp || "");
+            const storedRole = localStorage.getItem("role");
+            if (storedRole) {
+              setUserRole(storedRole);
+            }
           }
         }
       } catch (error) {
@@ -56,6 +71,10 @@ const Navbar = () => {
           const user = JSON.parse(userData);
           setUserName(user.name || "User");
           setUserProfilePic(user.pfp || "");
+          const storedRole = localStorage.getItem("role");
+          if (storedRole) {
+            setUserRole(storedRole);
+          }
         }
       }
     };
@@ -72,11 +91,16 @@ const Navbar = () => {
     localStorage.removeItem("isLoggedIn");
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    localStorage.removeItem("role");
     navigate("/");
   };
 
   const handlePost = () => {
     navigate("/post");
+  };
+
+  const handleAdmin = () => {
+    navigate("/admin");
   };
 
   // utility function to get profile picture URL
@@ -121,6 +145,11 @@ const Navbar = () => {
           {currentPath !== "/post" && (
             <button className="btn btn-outline-light me-2" onClick={handlePost}>
               Post Article
+            </button>
+          )}
+          {userRole === "admin" && currentPath !== "/admin" && (
+            <button className="btn btn-outline-warning me-2" onClick={handleAdmin}>
+              Admin
             </button>
           )}
           <button className="btn btn-outline-light" onClick={handleLogout}>

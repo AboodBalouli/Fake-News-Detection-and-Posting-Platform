@@ -109,7 +109,7 @@ const PostArticle = () => {
     setImageFile(null);
 
     setTimeout(() => {
-      navigate("/main", { replace: true }); // replace: true forces refresh
+      navigate("/main", { replace: true });
     }, 1500);
   };
 

@@ -26,8 +26,9 @@ const Login = () => {
       if (response.ok) {
         const data = await response.json();
         console.log("Login successful, data:", data);
-        localStorage.setItem("token", data.access_token);
-        localStorage.setItem("user", JSON.stringify(data.user));
+  localStorage.setItem("token", data.access_token);
+  localStorage.setItem("user", JSON.stringify(data.user));
+  localStorage.setItem("role", data.user.role ?? "user");
         navigate("/main");
       } else {
         const errorData = await response.json();

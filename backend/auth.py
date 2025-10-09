@@ -7,7 +7,7 @@ import models
 
 SECRET_KEY = "pewpew123"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 30000
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
