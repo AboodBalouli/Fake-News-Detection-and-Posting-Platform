@@ -146,44 +146,6 @@ CREATE USER fake_news_user WITH PASSWORD 'your_password';
 GRANT ALL PRIVILEGES ON DATABASE fake_news_db TO fake_news_user;
 ```
 
-## 🐳 Docker Deployment (Optional)
-
-### Backend Dockerfile
-
-```dockerfile
-FROM python:3.11
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-EXPOSE 8000
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### Frontend Dockerfile
-
-```dockerfile
-FROM node:18 AS build
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci
-
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
-```
-
 ## 📚 API Documentation
 
 The API is fully documented with OpenAPI/Swagger. Once the backend is running, visit:
