@@ -361,6 +361,11 @@ def register_user(user: UserCreate, db: Session = Depends(database.get_db)):
 def read_root():
     return {"message": "hello there"}
 
+
+@app.get("/health")
+def healthcheck():
+    return {"status": "ok"}
+
 @app.get("/api/db-test")
 def test_database():
     """Simple endpoint to test database connection"""

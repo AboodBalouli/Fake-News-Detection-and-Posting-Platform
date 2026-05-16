@@ -20,7 +20,11 @@ def _ensure_nltk_data() -> None:
         try:
             nltk.data.find(f"corpora/{resource}")
         except LookupError:
-            nltk.download(resource, quiet=True)
+            # Some corpora may be installed as a single .zip file.
+            try:
+                nltk.data.find(f"corpora/{resource}.zip")
+            except LookupError:
+                nltk.download(resource, quiet=True)
 
 
 _ensure_nltk_data()

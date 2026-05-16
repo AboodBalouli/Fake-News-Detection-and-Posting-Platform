@@ -96,6 +96,46 @@ npm run dev
 - **Backend API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
 
+## 🐳 Run With Docker (Recommended)
+
+This repo already includes Dockerfiles for the FastAPI backend and the React frontend.
+
+### Prerequisites
+
+- Docker Desktop (Windows/macOS) or Docker Engine (Linux)
+
+### Start everything
+
+From the repo root:
+
+```bash
+docker compose up --build
+```
+
+### URLs
+
+- **Frontend (nginx)**: http://localhost:5173
+- **Backend (FastAPI)**: http://localhost:8000
+- **Backend health**: http://localhost:8000/health
+
+If `http://localhost:5173` looks like the Vite dev server (you see `/@vite/client` in the HTML), you likely still have `npm run dev` running locally on port 5173. Stop that dev server (or use `http://127.0.0.1:5173` to reach the Docker nginx container).
+
+### Stop / reset
+
+```bash
+# stop containers
+docker compose down
+
+# stop + delete the Postgres data volume (THIS DELETES ALL DATA)
+docker compose down -v
+```
+
+### Notes
+
+- The backend reads `DATABASE_URL` from the container environment (see `docker-compose.yml`).
+- Uploaded images and profile pictures are bind-mounted to `backend/uploads` and `backend/profile_pictures`.
+- The fake-news classifier is loaded in `backend/ml_service.py` from `backend/ai_models/` (pickle `.sav` files). If you don't have those files locally yet, prediction will fail until you train/export them.
+
 ## 📁 Project Structure
 
 ```
